@@ -1,3 +1,8 @@
+"""
+AI Recommendation Service
+Uses Claude API to generate personalized menu recommendations
+based on user preferences and dietary restrictions.
+"""
 import json
 from anthropic import Anthropic
 from app.core.config import get_settings

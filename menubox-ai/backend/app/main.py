@@ -1,3 +1,9 @@
+"""
+MenuBox AI - Backend API Server
+Version: 0.2.0
+Last Updated: January 2025
+"""
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

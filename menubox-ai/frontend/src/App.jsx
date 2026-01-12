@@ -1,3 +1,10 @@
+/**
+ * MenuBox AI - Main Application Component
+ * Routes and authentication handling
+ * @version 0.2.0
+ */
+
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
