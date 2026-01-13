@@ -38,6 +38,11 @@ class PreferenceUpdate(BaseModel):
     )
     spice_preference: SpiceLevel | None = None
     price_preference: PricePreference | None = None
+    custom_notes: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Any additional preferences or notes, e.g., 'absolutely no beef', 'prefer grilled over fried'"
+    )
 
 
 # Response schemas
@@ -50,6 +55,7 @@ class PreferenceResponse(BaseModel):
     disliked_ingredients: list[str]
     spice_preference: str
     price_preference: str
+    custom_notes: str | None = None
     created_at: datetime
     updated_at: datetime
     

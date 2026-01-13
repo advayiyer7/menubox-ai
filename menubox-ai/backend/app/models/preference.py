@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, ForeignKey, ARRAY
+from sqlalchemy import Column, String, DateTime, ForeignKey, ARRAY, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -20,6 +20,7 @@ class Preference(Base):
     disliked_ingredients = Column(ARRAY(String), default=list)  # cilantro, mushrooms, etc.
     spice_preference = Column(String(20), default="medium")  # none, mild, medium, hot, extra_hot
     price_preference = Column(String(20), default="any")  # budget, moderate, upscale, any
+    custom_notes = Column(Text, nullable=True)  # Free-form text for additional preferences
     
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

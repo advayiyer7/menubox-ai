@@ -47,6 +47,8 @@ async def generate_recommendations(
             pref_parts.append(f"Spice preference: {preferences.spice_preference}")
         if preferences.price_preference != "any":
             pref_parts.append(f"Price preference: {preferences.price_preference}")
+        if preferences.custom_notes:
+            pref_parts.append(f"Additional notes: {preferences.custom_notes}")
         
         preferences_text = "\n".join(pref_parts) if pref_parts else "No specific preferences set."
     else:
@@ -69,7 +71,8 @@ Consider:
 1. How well each item matches dietary restrictions (most important)
 2. Alignment with favorite cuisines and flavor preferences
 3. Avoidance of disliked ingredients
-4. General popularity indicators in the dish name/description
+4. Any additional notes or special requests from the customer (very important - follow these strictly)
+5. General popularity indicators in the dish name/description
 
 Return ONLY the JSON array, no other text."""
 

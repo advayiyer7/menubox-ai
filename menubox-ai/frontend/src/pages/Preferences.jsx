@@ -59,7 +59,8 @@ function Preferences() {
     favorite_cuisines: [],
     disliked_ingredients: [],
     spice_preference: 'medium',
-    price_preference: 'any'
+    price_preference: 'any',
+    custom_notes: ''
   });
   
   const [newIngredient, setNewIngredient] = useState('');
@@ -76,7 +77,8 @@ function Preferences() {
         favorite_cuisines: res.data.favorite_cuisines || [],
         disliked_ingredients: res.data.disliked_ingredients || [],
         spice_preference: res.data.spice_preference || 'medium',
-        price_preference: res.data.price_preference || 'any'
+        price_preference: res.data.price_preference || 'any',
+        custom_notes: res.data.custom_notes || ''
       });
     } catch (err) {
       setError('Failed to load preferences');
@@ -331,6 +333,25 @@ function Preferences() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Custom Notes */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
+            <h2 className="text-xl font-semibold mb-2 dark:text-white">📝 Additional Preferences</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Anything else we should know? (e.g., "absolutely no beef", "prefer grilled over fried", "looking for healthy options")
+            </p>
+            <textarea
+              value={preferences.custom_notes}
+              onChange={(e) => setPreferences(prev => ({ ...prev, custom_notes: e.target.value }))}
+              placeholder="Enter any additional preferences or notes..."
+              rows={4}
+              maxLength={500}
+              className="w-full px-4 py-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none"
+            />
+            <p className="text-sm text-gray-400 mt-2 text-right">
+              {preferences.custom_notes.length}/500 characters
+            </p>
           </div>
         </div>
 

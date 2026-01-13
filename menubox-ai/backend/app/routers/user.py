@@ -52,6 +52,9 @@ async def update_preferences(
     # Update only provided fields
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
+        # Handle enum values
+        if field in ('spice_preference', 'price_preference') and value is not None:
+            value = value.value if hasattr(value, 'value') else value
         setattr(preferences, field, value)
     
     db.commit()
