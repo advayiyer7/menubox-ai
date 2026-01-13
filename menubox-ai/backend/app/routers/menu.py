@@ -2,9 +2,10 @@
 Menu router - handles restaurant search, menu scraping, and image upload.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
+from typing import Optional
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -25,6 +26,7 @@ from app.services.google_places_service import (
 )
 from app.services.scraping_service import scrape_restaurant_menu
 from app.services.review_analyzer import get_popular_dishes_from_reviews
+from app.services.ocr_service import extract_menu_from_image
 
 router = APIRouter(prefix="/menu", tags=["Menu"])
 
@@ -201,25 +203,107 @@ async def search_restaurant(
 @router.post("/upload", response_model=MenuUploadResponse)
 async def upload_menu_image(
     file: UploadFile = File(...),
+    restaurant_name: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Upload a menu image for OCR processing.
-    TODO: Implement OCR with Claude Vision API.
+    
+    1. Validates the uploaded file
+    2. Uses Claude Vision to extract menu items
+    3. Creates a restaurant entry for the uploaded menu
+    4. Saves extracted menu items to database
     """
     # Validate file type
-    if not file.content_type or not file.content_type.startswith("image/"):
+    allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
+    if not file.content_type or file.content_type not in allowed_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an image"
+            detail=f"File must be an image (JPEG, PNG, WebP, or GIF). Got: {file.content_type}"
         )
     
-    # TODO: Implement OCR processing
-    # For now, return a placeholder response
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Menu image upload coming soon! Please use restaurant search for now."
+    # Read file content
+    try:
+        image_data = await file.read()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read uploaded file: {str(e)}"
+        )
+    
+    # Validate file size (max 10MB)
+    max_size = 10 * 1024 * 1024  # 10MB
+    if len(image_data) > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum size is 10MB."
+        )
+    
+    # Extract menu items using OCR
+    print(f"Processing menu image: {file.filename} ({len(image_data)} bytes)")
+    
+    try:
+        ocr_result = await extract_menu_from_image(image_data, file.content_type)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e)
+        )
+    except Exception as e:
+        print(f"OCR processing error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process menu image. Please try again with a clearer image."
+        )
+    
+    menu_items_data = ocr_result.get("menu_items", [])
+    detected_name = ocr_result.get("restaurant_name")
+    
+    if not menu_items_data:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Could not extract any menu items from the image. Please try a clearer photo."
+        )
+    
+    # Determine restaurant name
+    final_name = restaurant_name or detected_name or "Uploaded Menu"
+    
+    # Create restaurant entry for uploaded menu
+    restaurant = Restaurant(
+        id=uuid4(),
+        name=final_name,
+        location="Uploaded via photo",
+        cuisine_type="Various",
+        price_range="$$",
+        google_place_id=None  # No Google Place ID for uploaded menus
+    )
+    db.add(restaurant)
+    db.flush()
+    
+    # Save menu items
+    saved_count = 0
+    for item_data in menu_items_data:
+        menu_item = MenuItem(
+            id=uuid4(),
+            restaurant_id=restaurant.id,
+            item_name=item_data.get("name", "Unknown Item"),
+            description=item_data.get("description"),
+            price=item_data.get("price"),
+            category=item_data.get("category")
+        )
+        db.add(menu_item)
+        saved_count += 1
+    
+    db.commit()
+    
+    print(f"Saved {saved_count} menu items for restaurant: {final_name}")
+    
+    return MenuUploadResponse(
+        restaurant_id=restaurant.id,
+        restaurant_name=final_name,
+        menu_items_count=saved_count,
+        message=f"Successfully extracted {saved_count} menu items from your photo!"
     )
 
 
