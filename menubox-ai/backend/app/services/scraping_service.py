@@ -98,13 +98,23 @@ Return ONLY the JSON array, no other text or markdown formatting."""
         return []
 
 
-async def scrape_restaurant_menu(website_url: str, restaurant_name: str) -> list[dict]:
+async def scrape_restaurant_menu(
+    website_url: str | None,
+    restaurant_name: str,
+    location: str = ""
+) -> list[dict]:
     """
-    Legacy function - now redirects to web search.
-    Kept for backwards compatibility with existing code.
+    Get menu items for a restaurant using web search.
+    
+    Args:
+        website_url: Ignored (kept for backwards compatibility)
+        restaurant_name: Name of the restaurant
+        location: Optional location to narrow search
+    
+    Returns list of menu items with name, description, price, category.
     """
     # Use web search instead of direct scraping
-    return await get_menu_with_web_search(restaurant_name)
+    return await get_menu_with_web_search(restaurant_name, location)
 
 
 # Keep the old functions as fallbacks if needed

@@ -40,7 +40,7 @@ async def search_restaurant(
     
     1. Searches Google Places for the restaurant
     2. Gets restaurant details and reviews
-    3. Scrapes menu from restaurant website
+    3. Uses Claude web search to find menu items
     4. Falls back to extracting dishes from reviews if no menu found
     5. Saves everything to database
     """
@@ -130,18 +130,18 @@ async def search_restaurant(
         db.add(restaurant)
         db.flush()
     
-    # Step 4: Try to scrape menu from website
-    menu_items_data = []
-    website = place_details.get("website")
+    # Step 4: Use Claude web search to find menu (no website needed!)
+    print(f"Searching web for {restaurant.name} menu...")
+    menu_items_data = await scrape_restaurant_menu(
+        website_url=place_details.get("website"),  # Optional, not required anymore
+        restaurant_name=restaurant.name,
+        location=data.location or restaurant.location
+    )
+    print(f"Found {len(menu_items_data)} items from web search")
     
-    if website:
-        print(f"Scraping menu from: {website}")
-        menu_items_data = await scrape_restaurant_menu(website, restaurant.name)
-        print(f"Found {len(menu_items_data)} items from website")
-    
-    # Step 5: If no menu found, extract dishes from reviews
+    # Step 5: If no menu found, extract dishes from reviews as fallback
     if not menu_items_data and place_details.get("reviews"):
-        print("No menu found, extracting from reviews...")
+        print("No menu found via web search, extracting from reviews...")
         popular_dishes = await get_popular_dishes_from_reviews(place_details["reviews"])
         menu_items_data = [
             {
@@ -170,6 +170,11 @@ async def search_restaurant(
     
     db.commit()
     
+    # Determine source for response
+    source = "google_places+web_search"
+    if not menu_items_data:
+        source = "google_places+reviews"
+    
     # Step 7: Return response
     return RestaurantWithMenuResponse(
         id=restaurant.id,
@@ -189,7 +194,7 @@ async def search_restaurant(
             for item in saved_items
         ],
         reviews_analyzed=len(place_details.get("reviews", [])),
-        source="google_places" + ("+website" if website else "+reviews")
+        source=source
     )
 
 
