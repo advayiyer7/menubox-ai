@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { menuAPI, recommendationsAPI, userAPI } from '../services/api';
+import { menuAPI, recommendationsAPI } from '../services/api';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -70,16 +70,27 @@ function Dashboard() {
           <Link to="/dashboard" className="text-2xl font-bold text-orange-600">
             🍽️ MenuBox AI
           </Link>
-          <button onClick={handleLogout} className="text-gray-600 hover:text-orange-600 dark:text-gray-300">
-            Logout
-          </button>
+          <div className="flex items-center gap-4">
+            <Link 
+              to="/preferences" 
+              className="text-gray-600 hover:text-orange-600 dark:text-gray-300 flex items-center gap-1"
+            >
+              ⚙️ Preferences
+            </Link>
+            <button onClick={handleLogout} className="text-gray-600 hover:text-orange-600 dark:text-gray-300">
+              Logout
+            </button>
+          </div>
         </div>
       </nav>
 
       <main className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           Get Menu Recommendations
         </h1>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">
+          Set your <Link to="/preferences" className="text-orange-500 hover:underline">dietary preferences</Link> for personalized recommendations.
+        </p>
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg">

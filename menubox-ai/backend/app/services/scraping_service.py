@@ -66,11 +66,18 @@ Return ONLY the JSON array, no other text or markdown formatting."""
             messages=[{"role": "user", "content": prompt}]
         )
         
+        # Debug: print what we got back
+        print(f"Response has {len(message.content)} content blocks")
+        for i, block in enumerate(message.content):
+            print(f"  Block {i}: type={type(block).__name__}")
+        
         # Extract text response (Claude may return multiple content blocks)
         response_text = ""
         for block in message.content:
-            if hasattr(block, 'text'):
+            if hasattr(block, 'text') and block.text is not None:
                 response_text += block.text
+        
+        print(f"Extracted response text length: {len(response_text)}")
         
         response_text = response_text.strip()
         
@@ -91,10 +98,12 @@ Return ONLY the JSON array, no other text or markdown formatting."""
         
     except json.JSONDecodeError as e:
         print(f"JSON parsing error: {e}")
-        print(f"Response was: {response_text[:500]}")
+        print(f"Response was: {response_text[:500] if response_text else 'empty'}")
         return []
     except Exception as e:
         print(f"Web search menu error: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
