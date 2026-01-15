@@ -15,6 +15,7 @@ from app.schemas.recommendation import (
     RecommendedItem,
 )
 from app.services.ai_service import generate_recommendations
+from app.services.yelp_service import get_yelp_data, format_yelp_for_recommendations
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 
@@ -29,7 +30,7 @@ async def create_recommendation(
     Generate AI-powered menu recommendations.
     
     Analyzes restaurant menu items against user preferences
-    and returns personalized recommendations.
+    and review data from Yelp/Google, returns personalized recommendations.
     """
     # Get restaurant
     restaurant = db.query(Restaurant).filter(Restaurant.id == data.restaurant_id).first()
@@ -50,11 +51,26 @@ async def create_recommendation(
     # Get user preferences
     preferences = db.query(Preference).filter(Preference.user_id == current_user.id).first()
     
-    # Generate recommendations using AI
+    # Fetch review data from Yelp (if restaurant has a real location)
+    review_context = ""
+    if restaurant.location and restaurant.location != "Uploaded via photo":
+        print(f"Fetching Yelp reviews for {restaurant.name}...")
+        try:
+            yelp_data = await get_yelp_data(restaurant.name, restaurant.location)
+            if yelp_data.get("found"):
+                review_context = format_yelp_for_recommendations(yelp_data)
+                print(f"Got Yelp data: {yelp_data['business'].get('rating')}/5 ({yelp_data['business'].get('review_count')} reviews)")
+            else:
+                print("Restaurant not found on Yelp")
+        except Exception as e:
+            print(f"Yelp fetch error (continuing without): {e}")
+    
+    # Generate recommendations using AI with review context
     recommended_items = await generate_recommendations(
         menu_items=menu_items,
         preferences=preferences,
-        max_items=data.max_items
+        max_items=data.max_items,
+        review_context=review_context
     )
     
     # Save recommendation to history
@@ -68,6 +84,7 @@ async def create_recommendation(
             "disliked_ingredients": preferences.disliked_ingredients if preferences else [],
             "spice_preference": preferences.spice_preference if preferences else "medium",
             "price_preference": preferences.price_preference if preferences else "any",
+            "custom_notes": preferences.custom_notes if preferences else None,
         }
     )
     db.add(recommendation)

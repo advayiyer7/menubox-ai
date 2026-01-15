@@ -89,6 +89,13 @@ Return ONLY the JSON array, no other text or markdown formatting."""
         
         response_text = response_text.strip()
         
+        # Try to find JSON array in the response (Claude sometimes adds text before/after)
+        # Look for the array pattern
+        import re
+        json_match = re.search(r'\[\s*\{.*\}\s*\]', response_text, re.DOTALL)
+        if json_match:
+            response_text = json_match.group(0)
+        
         menu_items = json.loads(response_text)
         
         if isinstance(menu_items, list):
