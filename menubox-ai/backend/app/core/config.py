@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+    
+    # In the Settings class, add:
+    yelp_api_key: str | None = None
 
 
 @lru_cache()

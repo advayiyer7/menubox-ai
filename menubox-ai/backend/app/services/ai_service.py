@@ -1,7 +1,7 @@
 """
 AI Recommendation Service
 Uses Claude API to generate personalized menu recommendations
-based on user preferences and dietary restrictions.
+based on user preferences, dietary restrictions, and review data.
 """
 import json
 from anthropic import Anthropic
@@ -16,13 +16,20 @@ settings = get_settings()
 async def generate_recommendations(
     menu_items: list[MenuItem],
     preferences: Preference | None,
-    max_items: int = 5
+    max_items: int = 5,
+    review_context: str = ""
 ) -> list[RecommendedItem]:
     """
     Generate personalized menu recommendations using Claude AI.
     
-    Analyzes menu items against user preferences and returns
-    ranked recommendations with reasoning.
+    Analyzes menu items against user preferences and review data,
+    returns ranked recommendations with reasoning.
+    
+    Args:
+        menu_items: List of menu items from the restaurant
+        preferences: User's food preferences
+        max_items: Number of recommendations to return
+        review_context: Formatted string with Yelp/Google review data
     """
     
     # Build menu items text
@@ -54,6 +61,15 @@ async def generate_recommendations(
     else:
         preferences_text = "No preferences set - recommend popular/highly-rated items."
     
+    # Build the prompt with review context
+    review_section = ""
+    if review_context:
+        review_section = f"""
+REVIEW DATA (from Yelp & Google):
+{review_context}
+
+"""
+    
     prompt = f"""Analyze this restaurant menu and recommend the top {max_items} dishes for a customer.
 
 MENU ITEMS:
@@ -61,18 +77,21 @@ MENU ITEMS:
 
 CUSTOMER PREFERENCES:
 {preferences_text}
-
+{review_section}
 Return your recommendations as a JSON array with exactly {max_items} items. Each item should have:
 - "item_name": exact name from the menu
 - "score": match score from 0-100 based on how well it fits preferences
 - "reasoning": brief explanation (1-2 sentences) of why this is recommended
 
 Consider:
-1. How well each item matches dietary restrictions (most important)
-2. Alignment with favorite cuisines and flavor preferences
-3. Avoidance of disliked ingredients
-4. Any additional notes or special requests from the customer (very important - follow these strictly)
-5. General popularity indicators in the dish name/description
+1. How well each item matches dietary restrictions (most important - NEVER recommend items that violate restrictions)
+2. Any additional notes or special requests from the customer (very important - follow these strictly)
+3. Dishes mentioned positively in reviews (if review data provided)
+4. Alignment with favorite cuisines and flavor preferences
+5. Avoidance of disliked ingredients
+6. General popularity indicators in the dish name/description and reviews
+
+If review data mentions specific dishes as favorites or must-tries, prioritize those (unless they conflict with dietary restrictions).
 
 Return ONLY the JSON array, no other text."""
 

@@ -3,6 +3,7 @@ from app.services.scraping_service import scrape_restaurant_menu, get_menu_with_
 from app.services.review_analyzer import get_popular_dishes_from_reviews, analyze_reviews_for_dishes
 from app.services.google_places_service import search_restaurant, get_place_details
 from app.services.ocr_service import extract_menu_from_image, extract_menu_from_multiple_images
+from app.services.yelp_service import get_yelp_data, format_yelp_for_recommendations
 
 __all__ = [
     "generate_recommendations",
@@ -14,4 +15,6 @@ __all__ = [
     "get_place_details",
     "extract_menu_from_image",
     "extract_menu_from_multiple_images",
+    "get_yelp_data",
+    "format_yelp_for_recommendations",
 ]

@@ -8,6 +8,11 @@ function Dashboard() {
   const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Upload form state
+  const [uploadName, setUploadName] = useState('');
+  const [uploadLocation, setUploadLocation] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -38,16 +43,29 @@ function Dashboard() {
     }
   };
 
-  const handleFileUpload = async (e) => {
+  const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    e.preventDefault();
+    if (!selectedFile) return;
     
     setLoading(true);
     setError('');
     
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', selectedFile);
+      if (uploadName.trim()) {
+        formData.append('restaurant_name', uploadName.trim());
+      }
+      if (uploadLocation.trim()) {
+        formData.append('location', uploadLocation.trim());
+      }
       
       const uploadRes = await menuAPI.uploadImage(formData);
       const { restaurant_id } = uploadRes.data;
@@ -105,19 +123,50 @@ function Dashboard() {
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               Take a photo of the menu and we'll extract the items.
             </p>
-            <label className="block">
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={handleFileUpload}
-                disabled={loading}
-                className="block w-full text-sm text-gray-500 dark:text-gray-400
-                  file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0
-                  file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700
-                  hover:file:bg-orange-100 dark:file:bg-orange-900 dark:file:text-orange-300
-                  disabled:opacity-50"
+            <form onSubmit={handleFileUpload} className="space-y-3">
+              <div>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  disabled={loading}
+                  className="block w-full text-sm text-gray-500 dark:text-gray-400
+                    file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0
+                    file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700
+                    hover:file:bg-orange-100 dark:file:bg-orange-900 dark:file:text-orange-300
+                    disabled:opacity-50"
+                />
+                {selectedFile && (
+                  <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                    ✓ {selectedFile.name}
+                  </p>
+                )}
+              </div>
+              
+              <input
+                type="text"
+                value={uploadName}
+                onChange={(e) => setUploadName(e.target.value)}
+                placeholder="Restaurant name (optional)"
+                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
               />
-            </label>
+              
+              <input
+                type="text"
+                value={uploadLocation}
+                onChange={(e) => setUploadLocation(e.target.value)}
+                placeholder="Location (optional)"
+                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+              />
+              
+              <button 
+                type="submit"
+                disabled={loading || !selectedFile}
+                className="w-full bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition disabled:opacity-50"
+              >
+                {loading ? 'Processing...' : 'Get Recommendations'}
+              </button>
+            </form>
           </div>
 
           {/* Search Restaurant */}
