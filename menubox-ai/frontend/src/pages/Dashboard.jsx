@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { menuAPI, recommendationsAPI } from '../services/api';
 
@@ -12,7 +12,11 @@ function Dashboard() {
   // Upload form state
   const [uploadName, setUploadName] = useState('');
   const [uploadLocation, setUploadLocation] = useState('');
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  
+  // Refs for file inputs
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -27,14 +31,9 @@ function Dashboard() {
     setError('');
     
     try {
-      // Search for restaurant
       const restaurantRes = await menuAPI.searchRestaurant(restaurantName, location);
       const restaurant = restaurantRes.data;
-      
-      // Generate recommendations
       const recRes = await recommendationsAPI.generate(restaurant.id);
-      
-      // Navigate to results
       navigate(`/results/${recRes.data.id}`);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to get recommendations');
@@ -44,22 +43,44 @@ function Dashboard() {
   };
 
   const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles(prev => [...prev, ...files]);
+    }
+  };
+
+  const handleCameraCapture = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
+      setSelectedFiles(prev => [...prev, file]);
     }
+  };
+
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const clearAllFiles = () => {
+    setSelectedFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
   const handleFileUpload = async (e) => {
     e.preventDefault();
-    if (!selectedFile) return;
+    if (selectedFiles.length === 0) return;
     
     setLoading(true);
     setError('');
     
     try {
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      
+      // Append all files
+      selectedFiles.forEach((file, index) => {
+        formData.append('files', file);
+      });
+      
       if (uploadName.trim()) {
         formData.append('restaurant_name', uploadName.trim());
       }
@@ -67,10 +88,10 @@ function Dashboard() {
         formData.append('location', uploadLocation.trim());
       }
       
-      const uploadRes = await menuAPI.uploadImage(formData);
+      const uploadRes = await menuAPI.uploadImages(formData);
       const { restaurant_id } = uploadRes.data;
       
-      // Generate recommendations
+      // Generate recommendations (will use OCR-only mode)
       const recRes = await recommendationsAPI.generate(restaurant_id);
       
       navigate(`/results/${recRes.data.id}`);
@@ -119,29 +140,87 @@ function Dashboard() {
         <div className="grid md:grid-cols-2 gap-6">
           {/* Upload Menu */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 dark:text-white">📸 Upload Menu Photo</h2>
+            <h2 className="text-xl font-semibold mb-4 dark:text-white">📸 Upload Menu Photos</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Take a photo of the menu and we'll extract the items. Providing the restaurant name and location helps us research online reviews !
+              Take photos or upload images of the menu pages.
             </p>
             <form onSubmit={handleFileUpload} className="space-y-3">
-              <div>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  onChange={handleFileSelect}
+              {/* Camera and File buttons */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
                   disabled={loading}
-                  className="block w-full text-sm text-gray-500 dark:text-gray-400
-                    file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0
-                    file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700
-                    hover:file:bg-orange-100 dark:file:bg-orange-900 dark:file:text-orange-300
-                    disabled:opacity-50"
-                />
-                {selectedFile && (
-                  <p className="mt-2 text-sm text-green-600 dark:text-green-400">
-                    ✓ {selectedFile.name}
-                  </p>
-                )}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-orange-300 dark:border-orange-700 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 transition disabled:opacity-50"
+                >
+                  <span>📷</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Take Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition disabled:opacity-50"
+                >
+                  <span>📁</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Browse Files</span>
+                </button>
               </div>
+
+              {/* Hidden file inputs */}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleCameraCapture}
+                className="hidden"
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+
+              {/* Selected files preview */}
+              {selectedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {selectedFiles.length} photo{selectedFiles.length > 1 ? 's' : ''} selected
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearAllFiles}
+                      className="text-sm text-red-500 hover:text-red-700"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedFiles.map((file, index) => (
+                      <div
+                        key={index}
+                        className="relative group bg-gray-100 dark:bg-gray-700 rounded-lg p-2 pr-8"
+                      >
+                        <span className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-[150px] block">
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <input
                 type="text"
@@ -155,16 +234,16 @@ function Dashboard() {
                 type="text"
                 value={uploadLocation}
                 onChange={(e) => setUploadLocation(e.target.value)}
-                placeholder="Location (optional)"
+                placeholder="Location (optional, helps find reviews)"
                 className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
               />
               
               <button 
                 type="submit"
-                disabled={loading || !selectedFile}
+                disabled={loading || selectedFiles.length === 0}
                 className="w-full bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition disabled:opacity-50"
               >
-                {loading ? 'Processing...' : 'Get Recommendations'}
+                {loading ? 'Processing...' : `Get Recommendations${selectedFiles.length > 0 ? ` (${selectedFiles.length} photo${selectedFiles.length > 1 ? 's' : ''})` : ''}`}
               </button>
             </form>
           </div>
@@ -173,7 +252,7 @@ function Dashboard() {
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
             <h2 className="text-xl font-semibold mb-4 dark:text-white">🔍 Search Restaurant</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Enter the restaurant name to look up their menu.
+              Enter the restaurant name to look up their menu online.
             </p>
             <form onSubmit={handleSearch} className="space-y-3">
               <input
@@ -204,7 +283,11 @@ function Dashboard() {
         {loading && (
           <div className="mt-8 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-orange-500 border-t-transparent"></div>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">Analyzing menu and generating recommendations...</p>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">
+              {selectedFiles.length > 0 
+                ? 'Reading menu photos and generating recommendations...' 
+                : 'Analyzing menu and generating recommendations...'}
+            </p>
           </div>
         )}
       </main>

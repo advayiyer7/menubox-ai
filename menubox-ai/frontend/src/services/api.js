@@ -40,7 +40,12 @@ export const userAPI = {
 };
 
 export const menuAPI = {
+  // Single file upload (legacy)
   uploadImage: (formData) => api.post('/menu/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  // Multiple file upload
+  uploadImages: (formData) => api.post('/menu/upload-multiple', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
   searchRestaurant: (name, location) => api.post('/menu/search', { name, location }),

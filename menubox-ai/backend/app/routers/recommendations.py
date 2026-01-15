@@ -16,8 +16,67 @@ from app.schemas.recommendation import (
 )
 from app.services.ai_service import generate_recommendations
 from app.services.yelp_service import get_yelp_data, format_yelp_for_recommendations
+from app.services.review_analyzer import analyze_reviews_for_dishes
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
+
+
+async def get_dish_reviews_from_yelp(
+    restaurant_name: str,
+    location: str,
+    menu_item_names: list[str]
+) -> str:
+    """
+    Cross-reference menu items with Yelp reviews.
+    Returns formatted string with what reviewers say about specific dishes.
+    """
+    try:
+        yelp_data = await get_yelp_data(restaurant_name, location)
+        
+        if not yelp_data.get("found"):
+            return ""
+        
+        business = yelp_data.get("business", {})
+        reviews = yelp_data.get("reviews", [])
+        
+        if not reviews:
+            # Return just the rating if no review text
+            rating = business.get("rating")
+            review_count = business.get("review_count")
+            if rating:
+                return f"Yelp Rating: {rating}/5 ({review_count} reviews)"
+            return ""
+        
+        # Analyze which dishes are mentioned in reviews
+        reviews_formatted = [{"text": r.get("text", ""), "rating": r.get("rating")} for r in reviews]
+        dish_mentions = await analyze_reviews_for_dishes(reviews_formatted, menu_item_names)
+        
+        parts = []
+        parts.append(f"Yelp Rating: {business.get('rating', 'N/A')}/5 ({business.get('review_count', 0)} reviews)")
+        
+        if dish_mentions:
+            parts.append("\nDishes mentioned in reviews:")
+            for dish_name, info in dish_mentions.items():
+                sentiment = info.get("sentiment", "unknown")
+                mentions = info.get("mentions", 0)
+                emoji = "👍" if sentiment == "positive" else "👎" if sentiment == "negative" else "🤷"
+                parts.append(f"  {emoji} {dish_name}: {sentiment} ({mentions} mention{'s' if mentions > 1 else ''})")
+                quotes = info.get("quotes", [])
+                for quote in quotes[:1]:  # Just first quote
+                    parts.append(f"     \"{quote}\"")
+        
+        # Add general review snippets
+        parts.append("\nRecent review highlights:")
+        for review in reviews[:2]:
+            rating = review.get("rating", "?")
+            text = review.get("text", "")[:150]
+            parts.append(f"  ({rating}/5) \"{text}...\"")
+        
+        return "\n".join(parts)
+        
+    except Exception as e:
+        print(f"Error getting dish reviews from Yelp: {e}")
+        return ""
 
 
 @router.post("/generate", response_model=RecommendationResponse)
@@ -29,8 +88,9 @@ async def create_recommendation(
     """
     Generate AI-powered menu recommendations.
     
-    Analyzes restaurant menu items against user preferences
-    and review data from Yelp/Google, returns personalized recommendations.
+    For searched restaurants: Uses full Yelp review data
+    For OCR uploads: Only uses parsed menu items, but cross-references
+                     those specific dishes with Yelp reviews
     """
     # Get restaurant
     restaurant = db.query(Restaurant).filter(Restaurant.id == data.restaurant_id).first()
@@ -51,10 +111,30 @@ async def create_recommendation(
     # Get user preferences
     preferences = db.query(Preference).filter(Preference.user_id == current_user.id).first()
     
-    # Fetch review data from Yelp (if restaurant has a real location)
+    # Determine if this is an OCR-uploaded restaurant
+    is_ocr_upload = restaurant.google_place_id is None
+    
     review_context = ""
-    if restaurant.location and restaurant.location != "Uploaded via photo":
-        print(f"Fetching Yelp reviews for {restaurant.name}...")
+    
+    if is_ocr_upload:
+        # OCR MODE: Only use parsed menu items, but cross-reference with Yelp
+        print(f"OCR mode for {restaurant.name} - cross-referencing dishes with Yelp...")
+        
+        # Only try Yelp if we have a real location (not "Uploaded via photo")
+        if restaurant.location and restaurant.location != "Uploaded via photo":
+            menu_item_names = [item.item_name for item in menu_items]
+            review_context = await get_dish_reviews_from_yelp(
+                restaurant.name,
+                restaurant.location,
+                menu_item_names
+            )
+            if review_context:
+                print(f"Found Yelp data for dish cross-reference")
+            else:
+                print(f"No Yelp data found for {restaurant.name}")
+    else:
+        # SEARCH MODE: Use full Yelp review data
+        print(f"Search mode for {restaurant.name} - fetching Yelp reviews...")
         try:
             yelp_data = await get_yelp_data(restaurant.name, restaurant.location)
             if yelp_data.get("found"):
@@ -65,7 +145,7 @@ async def create_recommendation(
         except Exception as e:
             print(f"Yelp fetch error (continuing without): {e}")
     
-    # Generate recommendations using AI with review context
+    # Generate recommendations using AI
     recommended_items = await generate_recommendations(
         menu_items=menu_items,
         preferences=preferences,
