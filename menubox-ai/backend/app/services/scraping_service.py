@@ -4,6 +4,8 @@ Replaces manual HTML scraping with AI-powered web search.
 """
 
 import json
+import re
+import asyncio
 from anthropic import Anthropic
 from app.core.config import get_settings
 
@@ -18,44 +20,39 @@ async def get_menu_with_web_search(
     """
     Use Claude with web search to find menu items for a restaurant.
     
-    This is more reliable than scraping because:
-    - Works with JS-heavy sites (searches indexed content)
-    - Aggregates info from multiple sources
-    - Handles various menu formats automatically
-    
     Returns list of menu items with name, description, price, category.
     """
     if not settings.anthropic_api_key:
         return []
     
-    # Build search context
-    search_query = f"{restaurant_name}"
-    if location:
-        search_query += f" {location}"
-    
-    prompt = f"""Find the menu for this restaurant and extract all the dishes:
+    prompt = f"""Search for the menu of {restaurant_name}{f' in {location}' if location else ''} and extract dishes.
 
-Restaurant: {restaurant_name}
-{f'Location: {location}' if location else ''}
-{f'Cuisine Type: {cuisine_type}' if cuisine_type else ''}
+IMPORTANT: You MUST respond with ONLY a JSON array. No explanations, no markdown, no text before or after.
 
-Please search for this restaurant's menu and provide a comprehensive list of their dishes.
+If you find menu items, return them in this exact format:
+[
+  {{"name": "Dish Name", "description": "Brief description", "price": 15.99, "category": "Category"}},
+  ...
+]
 
-Return the menu items as a JSON array. Each item should have:
-- "name": dish name
-- "description": brief description (null if not found)
-- "price": price as a number without $ sign (null if not found)
-- "category": category like "Appetizers", "Entrees", "Pasta", "Desserts", etc.
+If you cannot find specific menu items, still return your best guess based on what the restaurant serves:
+[
+  {{"name": "Popular Dish", "description": null, "price": null, "category": "Entrees"}},
+  ...
+]
 
-Try to find as many menu items as possible from their full menu.
-If you find prices, include them. If not, that's okay.
+Rules:
+- Return ONLY the JSON array, nothing else
+- No markdown code blocks
+- No explanatory text
+- price should be a number or null (no $ sign)
+- Include at least 10-20 items if possible
 
-Return ONLY the JSON array, no other text or markdown formatting."""
+START YOUR RESPONSE WITH [ AND END WITH ]"""
 
     try:
         client = Anthropic(api_key=settings.anthropic_api_key)
         
-        # Use web search tool
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
@@ -66,12 +63,12 @@ Return ONLY the JSON array, no other text or markdown formatting."""
             messages=[{"role": "user", "content": prompt}]
         )
         
-        # Debug: print what we got back
+        # Debug output
         print(f"Response has {len(message.content)} content blocks")
         for i, block in enumerate(message.content):
             print(f"  Block {i}: type={type(block).__name__}")
         
-        # Extract text response (Claude may return multiple content blocks)
+        # Extract text from all blocks
         response_text = ""
         for block in message.content:
             if hasattr(block, 'text') and block.text is not None:
@@ -79,35 +76,70 @@ Return ONLY the JSON array, no other text or markdown formatting."""
         
         print(f"Extracted response text length: {len(response_text)}")
         
-        response_text = response_text.strip()
-        
-        # Clean up response if wrapped in markdown
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0]
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0]
+        if not response_text.strip():
+            print("Empty response from Claude")
+            return []
         
         response_text = response_text.strip()
         
-        # Try to find JSON array in the response (Claude sometimes adds text before/after)
-        # Look for the array pattern
-        import re
-        json_match = re.search(r'\[\s*\{.*\}\s*\]', response_text, re.DOTALL)
-        if json_match:
-            response_text = json_match.group(0)
+        # Try multiple extraction methods
+        menu_items = None
         
-        menu_items = json.loads(response_text)
+        # Method 1: Direct parse (if response is clean JSON)
+        if response_text.startswith('['):
+            try:
+                menu_items = json.loads(response_text)
+            except json.JSONDecodeError:
+                pass
         
-        if isinstance(menu_items, list):
+        # Method 2: Extract from markdown code block
+        if menu_items is None and "```" in response_text:
+            try:
+                if "```json" in response_text:
+                    json_str = response_text.split("```json")[1].split("```")[0]
+                else:
+                    json_str = response_text.split("```")[1].split("```")[0]
+                menu_items = json.loads(json_str.strip())
+            except (json.JSONDecodeError, IndexError):
+                pass
+        
+        # Method 3: Regex to find JSON array anywhere in text
+        if menu_items is None:
+            # Find anything that looks like a JSON array
+            json_match = re.search(r'\[\s*\{[^{}]*\}(?:\s*,\s*\{[^{}]*\})*\s*\]', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    menu_items = json.loads(json_match.group(0))
+                except json.JSONDecodeError:
+                    pass
+        
+        # Method 4: More aggressive - find [ and ] and try to parse between
+        if menu_items is None:
+            start_idx = response_text.find('[')
+            end_idx = response_text.rfind(']')
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                try:
+                    potential_json = response_text[start_idx:end_idx + 1]
+                    menu_items = json.loads(potential_json)
+                except json.JSONDecodeError:
+                    pass
+        
+        if menu_items and isinstance(menu_items, list):
             print(f"Found {len(menu_items)} menu items via web search")
             return menu_items
+        
+        print(f"Could not parse JSON from response")
+        print(f"Response preview: {response_text[:300]}...")
         return []
         
-    except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
-        print(f"Response was: {response_text[:500] if response_text else 'empty'}")
-        return []
     except Exception as e:
+        error_str = str(e)
+        if "rate_limit" in error_str.lower() or "429" in error_str:
+            print(f"Rate limit hit, waiting 30 seconds...")
+            await asyncio.sleep(30)
+            # Could retry here, but for now just return empty
+            return []
+        
         print(f"Web search menu error: {e}")
         import traceback
         traceback.print_exc()
@@ -121,19 +153,10 @@ async def scrape_restaurant_menu(
 ) -> list[dict]:
     """
     Get menu items for a restaurant using web search.
-    
-    Args:
-        website_url: Ignored (kept for backwards compatibility)
-        restaurant_name: Name of the restaurant
-        location: Optional location to narrow search
-    
-    Returns list of menu items with name, description, price, category.
     """
-    # Use web search instead of direct scraping
     return await get_menu_with_web_search(restaurant_name, location)
 
 
-# Keep the old functions as fallbacks if needed
 async def fetch_website_content(url: str) -> str | None:
     """Fetch HTML content from a URL - legacy fallback."""
     try:
