@@ -37,8 +37,14 @@ class Settings(BaseSettings):
     # In the Settings class, add:
     yelp_api_key: str | None = None
 
-    resend_api_key: str | None = None
-    from_email: str = "onboarding@resend.dev"  # Use this for testing
+    # resend_api_key: str | None = None
+    # from_email: str = "onboarding@resend.dev"  # Use this for testing
+    # frontend_url: str = "http://localhost:5173"
+
+    # Email settings (Brevo)
+    brevo_api_key: str | None = None
+    from_email: str = "noreply@menubox.ai"  # Can be any email for now
+    from_name: str = "MenuBox AI"
     frontend_url: str = "http://localhost:5173"
 
 

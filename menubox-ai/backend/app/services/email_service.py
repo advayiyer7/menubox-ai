@@ -1,39 +1,71 @@
 """
-Email service using Resend for transactional emails.
+Email service using Brevo (formerly Sendinblue) for transactional emails.
+Free tier: 300 emails/day, can send to ANY email address.
 """
 
-import resend
+import httpx
 from app.core.config import get_settings
 
 settings = get_settings()
 
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
-def init_resend():
-    """Initialize Resend with API key."""
-    api_key = getattr(settings, 'resend_api_key', None)
-    if api_key:
-        resend.api_key = api_key
-        return True
-    return False
+
+async def send_email(to_email: str, subject: str, html_content: str) -> bool:
+    """
+    Send an email using Brevo API.
+    """
+    api_key = getattr(settings, 'brevo_api_key', None)
+    if not api_key:
+        print("Brevo API key not configured, skipping email")
+        return False
+    
+    from_email = getattr(settings, 'from_email', 'noreply@menubox.ai')
+    from_name = getattr(settings, 'from_name', 'MenuBox AI')
+    
+    headers = {
+        "api-key": api_key,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    
+    payload = {
+        "sender": {
+            "name": from_name,
+            "email": from_email
+        },
+        "to": [
+            {"email": to_email}
+        ],
+        "subject": subject,
+        "htmlContent": html_content
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                BREVO_API_URL,
+                headers=headers,
+                json=payload,
+                timeout=10.0
+            )
+            
+            if response.status_code in [200, 201]:
+                print(f"Email sent to {to_email}: {response.json()}")
+                return True
+            else:
+                print(f"Brevo API error: {response.status_code} - {response.text}")
+                return False
+                
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        return False
 
 
 async def send_password_reset_email(to_email: str, reset_token: str, user_name: str = None) -> bool:
     """
     Send password reset email.
-    
-    Args:
-        to_email: User's email address
-        reset_token: The reset token
-        user_name: Optional user name for personalization
-    
-    Returns:
-        True if sent successfully, False otherwise
     """
-    if not init_resend():
-        print("Resend API key not configured, skipping email")
-        return False
-    
-    # Build reset URL - update this for production
     frontend_url = getattr(settings, 'frontend_url', 'http://localhost:5173')
     reset_url = f"{frontend_url}/reset-password?token={reset_token}"
     
@@ -76,33 +108,13 @@ async def send_password_reset_email(to_email: str, reset_token: str, user_name: 
     </html>
     """
     
-    try:
-        from_email = getattr(settings, 'from_email', 'noreply@menubox.ai')
-        
-        params = {
-            "from": f"MenuBox AI <{from_email}>",
-            "to": [to_email],
-            "subject": "Reset your MenuBox AI password",
-            "html": html_content
-        }
-        
-        response = resend.Emails.send(params)
-        print(f"Password reset email sent to {to_email}: {response}")
-        return True
-        
-    except Exception as e:
-        print(f"Failed to send password reset email: {e}")
-        return False
+    return await send_email(to_email, "Reset your MenuBox AI password", html_content)
 
 
 async def send_verification_email(to_email: str, verification_token: str, user_name: str = None) -> bool:
     """
     Send email verification link.
     """
-    if not init_resend():
-        print("Resend API key not configured, skipping email")
-        return False
-    
     frontend_url = getattr(settings, 'frontend_url', 'http://localhost:5173')
     verify_url = f"{frontend_url}/verify-email?token={verification_token}"
     
@@ -144,34 +156,15 @@ async def send_verification_email(to_email: str, verification_token: str, user_n
     </html>
     """
     
-    try:
-        from_email = getattr(settings, 'from_email', 'noreply@menubox.ai')
-        
-        params = {
-            "from": f"MenuBox AI <{from_email}>",
-            "to": [to_email],
-            "subject": "Verify your MenuBox AI email",
-            "html": html_content
-        }
-        
-        response = resend.Emails.send(params)
-        print(f"Verification email sent to {to_email}: {response}")
-        return True
-        
-    except Exception as e:
-        print(f"Failed to send verification email: {e}")
-        return False
+    return await send_email(to_email, "Verify your MenuBox AI email", html_content)
 
 
 async def send_welcome_email(to_email: str, user_name: str = None) -> bool:
     """
     Send welcome email after verification.
     """
-    if not init_resend():
-        return False
-    
-    greeting = f"Hi {user_name}," if user_name else "Hi,"
     frontend_url = getattr(settings, 'frontend_url', 'http://localhost:5173')
+    greeting = f"Hi {user_name}," if user_name else "Hi,"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -208,19 +201,4 @@ async def send_welcome_email(to_email: str, user_name: str = None) -> bool:
     </html>
     """
     
-    try:
-        from_email = getattr(settings, 'from_email', 'noreply@menubox.ai')
-        
-        params = {
-            "from": f"MenuBox AI <{from_email}>",
-            "to": [to_email],
-            "subject": "Welcome to MenuBox AI! 🍽️",
-            "html": html_content
-        }
-        
-        resend.Emails.send(params)
-        return True
-        
-    except Exception as e:
-        print(f"Failed to send welcome email: {e}")
-        return False
+    return await send_email(to_email, "Welcome to MenuBox AI! 🍽️", html_content)
