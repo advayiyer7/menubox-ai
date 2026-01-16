@@ -142,7 +142,7 @@ function Dashboard() {
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
             <h2 className="text-xl font-semibold mb-4 dark:text-white">📸 Upload Menu Photos</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Take photos or upload images of the menu pages.
+              Take photos or upload images of the menu pages. Inputting the restaurant name and location helps us find reviews online!
             </p>
             <form onSubmit={handleFileUpload} className="space-y-3">
               {/* Camera and File buttons */}
