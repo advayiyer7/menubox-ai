@@ -80,3 +80,15 @@ class MessageResponse(BaseModel):
     """Generic message response."""
     message: str
     success: bool = True
+
+
+class SessionResponse(BaseModel):
+    """Active session info."""
+    id: str
+    device_info: str
+    created_at: datetime
+    expires_at: datetime
+    is_current: bool = False
+    
+    class Config:
+        from_attributes = True

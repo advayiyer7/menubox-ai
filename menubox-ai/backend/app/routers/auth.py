@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from typing import List
 
 from app.core.database import get_db
 from app.core.security import (
@@ -18,6 +19,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.models.preference import Preference
+from app.models.refresh_token import RefreshToken
 from app.schemas.auth import (
     UserRegister, 
     UserLogin, 
@@ -31,6 +33,7 @@ from app.schemas.auth import (
     VerifyEmailRequest,
     ResendVerificationRequest,
     MessageResponse,
+    SessionResponse,
 )
 from app.services.email_service import (
     send_password_reset_email,
@@ -51,7 +54,7 @@ async def register(
     Register a new user account.
     
     Creates user, initializes preferences, and sends verification email.
-    Returns JWT tokens on success.
+    Returns JWT tokens on success (but user must verify email to login again).
     """
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == data.email.lower()).first()
@@ -61,11 +64,16 @@ async def register(
             detail="Email already registered"
         )
     
+    # Generate verification token
+    verification_token = create_verification_token()
+    
     # Create user
     user = User(
         email=data.email.lower(),
         password_hash=hash_password(data.password),
-        email_verified=False  # Require verification
+        email_verified=False,
+        reset_token=verification_token,
+        reset_token_expires=datetime.now(timezone.utc) + timedelta(hours=24)
     )
     
     try:
@@ -85,15 +93,10 @@ async def register(
             detail="Email already registered"
         )
     
-    # Send verification email (async, don't wait)
-    verification_token = create_verification_token()
-    user.reset_token = verification_token  # Reuse field for verification
-    user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
-    db.commit()
-    
+    # Send verification email
     await send_verification_email(user.email, verification_token)
     
-    # Generate tokens
+    # Generate tokens (user gets one-time access but must verify for future logins)
     access_token = create_access_token(data={"sub": str(user.id)})
     device_info = request.headers.get("User-Agent", "Unknown")[:255]
     refresh_token = create_refresh_token(str(user.id), db, device_info)
@@ -113,6 +116,8 @@ async def login(
 ):
     """
     Authenticate user and return JWT tokens.
+    
+    REQUIRES email to be verified before allowing login.
     """
     # Find user
     user = db.query(User).filter(User.email == data.email.lower()).first()
@@ -121,6 +126,13 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
+        )
+    
+    # Check if email is verified
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in. Check your inbox for the verification link."
         )
     
     # Generate tokens
@@ -149,6 +161,14 @@ async def refresh_access_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token"
+        )
+    
+    # Check if user is still verified (in case admin revokes)
+    user = db.query(User).filter(User.id == refresh_token.user_id).first()
+    if not user or not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account not verified"
         )
     
     # Generate new access token
@@ -180,6 +200,57 @@ async def logout_all_devices(
     """
     count = revoke_all_user_tokens(str(current_user.id), db)
     return MessageResponse(message=f"Logged out from {count} device(s)")
+
+
+@router.get("/sessions", response_model=List[SessionResponse])
+async def get_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all active sessions for the current user.
+    """
+    sessions = db.query(RefreshToken).filter(
+        RefreshToken.user_id == current_user.id,
+        RefreshToken.expires_at > datetime.now(timezone.utc)
+    ).order_by(RefreshToken.created_at.desc()).all()
+    
+    return [
+        SessionResponse(
+            id=str(session.id),
+            device_info=session.device_info or "Unknown device",
+            created_at=session.created_at,
+            expires_at=session.expires_at,
+            is_current=False  # Will be set by frontend based on stored token
+        )
+        for session in sessions
+    ]
+
+
+@router.delete("/sessions/{session_id}", response_model=MessageResponse)
+async def revoke_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revoke a specific session by ID.
+    """
+    session = db.query(RefreshToken).filter(
+        RefreshToken.id == session_id,
+        RefreshToken.user_id == current_user.id
+    ).first()
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    db.delete(session)
+    db.commit()
+    
+    return MessageResponse(message="Session revoked successfully")
 
 
 @router.post("/forgot-password", response_model=MessageResponse)

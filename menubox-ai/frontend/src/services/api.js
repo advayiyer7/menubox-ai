@@ -100,6 +100,16 @@ api.interceptors.response.use(
       }
     }
 
+    // If 403 (unverified email), redirect to verification page
+    if (error.response?.status === 403) {
+      const detail = error.response?.data?.detail || '';
+      if (detail.includes('verify your email')) {
+        // Store email for resend functionality
+        window.location.href = '/login?unverified=true';
+        return Promise.reject(error);
+      }
+    }
+
     // If still 401 after refresh attempt, redirect to login
     if (error.response?.status === 401) {
       clearTokens();
@@ -144,6 +154,10 @@ export const authAPI = {
   verifyEmail: (token) => api.post('/auth/verify-email', { token }),
   resendVerification: (email) => api.post('/auth/resend-verification', { email }),
   getMe: () => api.get('/auth/me'),
+  
+  // Session management
+  getSessions: () => api.get('/auth/sessions'),
+  revokeSession: (sessionId) => api.delete(`/auth/sessions/${sessionId}`),
 };
 
 export const userAPI = {
@@ -175,6 +189,7 @@ export const recommendationsAPI = {
 // Export helper to check auth status
 export const isAuthenticated = () => !!accessToken;
 export const getAccessToken = () => accessToken;
+export const getRefreshToken = () => refreshToken;
 export { clearTokens, setTokens };
 
 export default api;
