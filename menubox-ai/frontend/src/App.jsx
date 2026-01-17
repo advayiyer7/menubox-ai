@@ -1,6 +1,5 @@
 /**
  * MenuBox AI - Main Application Component
- * Routes and authentication handling
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -8,7 +7,7 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Results from './pages/Results';
 import Preferences from './pages/Preferences';
-import Sessions from './pages/Sessions';
+import CheckEmail from './pages/CheckEmail';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
@@ -33,6 +32,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route path="/check-email" element={<CheckEmail />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
@@ -40,7 +40,6 @@ function App() {
           {/* Protected routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/preferences" element={<ProtectedRoute><Preferences /></ProtectedRoute>} />
-          <Route path="/sessions" element={<ProtectedRoute><Sessions /></ProtectedRoute>} />
           <Route path="/results/:id" element={<ProtectedRoute><Results /></ProtectedRoute>} />
           
           {/* Fallback */}
