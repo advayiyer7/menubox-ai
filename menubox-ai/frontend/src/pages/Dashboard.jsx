@@ -9,24 +9,22 @@ function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Upload form state
   const [uploadName, setUploadName] = useState('');
   const [uploadLocation, setUploadLocation] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
   
-  // Refs for file inputs
   const fileInputRef = useRef(null);
   const mobileFileInputRef = useRef(null);
 
-  // Check if mobile device
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  const handleLogout = async () => {
-    try {
-      await authAPI.logout();
-    } finally {
-      navigate('/');
-    }
+  const handleLogout = () => {
+    // This clears localStorage and redirects
+    authAPI.logout();
+    // Force navigation to login
+    navigate('/login', { replace: true });
+    // Force page reload to clear any cached state
+    window.location.reload();
   };
 
   const handleSearch = async (e) => {
@@ -69,7 +67,6 @@ function Dashboard() {
     if (isMobile) {
       mobileFileInputRef.current?.click();
     } else {
-      // On desktop, just open file picker
       fileInputRef.current?.click();
     }
   };
@@ -84,7 +81,6 @@ function Dashboard() {
     try {
       const formData = new FormData();
       
-      // Append all files
       selectedFiles.forEach((file) => {
         formData.append('files', file);
       });
@@ -98,10 +94,7 @@ function Dashboard() {
       
       const uploadRes = await menuAPI.uploadImages(formData);
       const { restaurant_id } = uploadRes.data;
-      
-      // Generate recommendations
       const recRes = await recommendationsAPI.generate(restaurant_id);
-      
       navigate(`/results/${recRes.data.id}`);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to process menu');
@@ -124,15 +117,9 @@ function Dashboard() {
             >
               ⚙️ <span className="hidden sm:inline">Preferences</span>
             </Link>
-            <Link 
-              to="/sessions" 
-              className="text-gray-600 hover:text-orange-600 dark:text-gray-300 flex items-center gap-1"
-            >
-              🔐 <span className="hidden sm:inline">Sessions</span>
-            </Link>
             <button 
               onClick={handleLogout} 
-              className="text-gray-600 hover:text-orange-600 dark:text-gray-300"
+              className="text-gray-600 hover:text-red-600 dark:text-gray-300"
             >
               Logout
             </button>
@@ -162,7 +149,6 @@ function Dashboard() {
               Take photos or upload images of the menu pages.
             </p>
             <form onSubmit={handleFileUpload} className="space-y-3">
-              {/* Camera and File buttons */}
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -186,7 +172,6 @@ function Dashboard() {
                 </button>
               </div>
 
-              {/* Hidden file inputs */}
               <input
                 ref={mobileFileInputRef}
                 type="file"
@@ -204,7 +189,6 @@ function Dashboard() {
                 className="hidden"
               />
 
-              {/* Selected files preview */}
               {selectedFiles.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">

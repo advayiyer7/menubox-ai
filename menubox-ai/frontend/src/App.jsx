@@ -7,7 +7,7 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Results from './pages/Results';
 import Preferences from './pages/Preferences';
-import CheckEmail from './pages/CheckEmail';
+import VerifyPending from './pages/VerifyPending';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
@@ -32,7 +32,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-          <Route path="/check-email" element={<CheckEmail />} />
+          <Route path="/verify-pending" element={<VerifyPending />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />

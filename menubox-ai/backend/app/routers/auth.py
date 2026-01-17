@@ -27,7 +27,6 @@ from app.schemas.auth import (
     AccessTokenResponse,
     PasswordResetRequest,
     PasswordResetConfirm,
-    ChangePassword,
     VerifyEmailRequest,
     ResendVerificationRequest,
     MessageResponse,
@@ -49,8 +48,7 @@ async def register(
     """
     Register a new user account.
     
-    Creates user, sends verification email.
-    User MUST verify email before they can login.
+    NO TOKENS RETURNED - user must verify email first.
     """
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == data.email.lower()).first()
@@ -63,7 +61,7 @@ async def register(
     # Generate verification token
     verification_token = create_verification_token()
     
-    # Create user (NOT verified)
+    # Create user (NOT verified, NO tokens)
     user = User(
         email=data.email.lower(),
         password_hash=hash_password(data.password),
@@ -81,7 +79,6 @@ async def register(
         db.add(preferences)
         
         db.commit()
-        db.refresh(user)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -92,7 +89,7 @@ async def register(
     # Send verification email
     await send_verification_email(user.email, verification_token)
     
-    # Return message - NO tokens (user must verify first)
+    # NO TOKENS - just a message
     return MessageResponse(
         message="Account created! Please check your email to verify your account."
     )
@@ -107,25 +104,26 @@ async def login(
     """
     Authenticate user and return JWT tokens.
     
-    BLOCKS login if email is not verified.
+    BLOCKS if email not verified - returns 403.
     """
     # Find user
     user = db.query(User).filter(User.email == data.email.lower()).first()
     
+    # Check credentials
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
     
-    # BLOCK if email is not verified
+    # BLOCK if not verified
     if not user.email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email before logging in. Check your inbox for the verification link."
         )
     
-    # Generate tokens
+    # User is verified - generate tokens
     access_token = create_access_token(data={"sub": str(user.id)})
     device_info = request.headers.get("User-Agent", "Unknown")[:255]
     refresh_token = create_refresh_token(str(user.id), db, device_info)
@@ -152,7 +150,6 @@ async def refresh_access_token(
         )
     
     access_token = create_access_token(data={"sub": str(refresh_token.user_id)})
-    
     return AccessTokenResponse(access_token=access_token)
 
 
@@ -179,9 +176,9 @@ async def forgot_password(
         user.reset_token = reset_token
         user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
         db.commit()
-        
         await send_password_reset_email(user.email, reset_token)
     
+    # Always return success (don't reveal if email exists)
     return MessageResponse(
         message="If an account with that email exists, we sent a password reset link."
     )
@@ -210,12 +207,10 @@ async def reset_password(
     user.password_hash = hash_password(data.new_password)
     user.reset_token = None
     user.reset_token_expires = None
-    
     revoke_all_user_tokens(str(user.id), db)
-    
     db.commit()
     
-    return MessageResponse(message="Password reset successfully. Please log in with your new password.")
+    return MessageResponse(message="Password reset successfully. Please log in.")
 
 
 @router.post("/verify-email", response_model=MessageResponse)
@@ -238,6 +233,7 @@ async def verify_email(
             detail="Verification link has expired. Please request a new one."
         )
     
+    # Mark as verified
     user.email_verified = True
     user.reset_token = None
     user.reset_token_expires = None
@@ -261,7 +257,6 @@ async def resend_verification(
         user.reset_token = verification_token
         user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         db.commit()
-        
         await send_verification_email(user.email, verification_token)
     
     return MessageResponse(

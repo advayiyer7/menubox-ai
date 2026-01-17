@@ -27,15 +27,14 @@ function Register() {
     setLoading(true);
 
     try {
-      const response = await authAPI.register({ email, password });
-      // Check if email verification is required
-      if (response.data.user && !response.data.user.is_verified) {
-        navigate('/dashboard', { 
-          state: { showVerificationBanner: true } 
-        });
-      } else {
-        navigate('/dashboard');
-      }
+      await authAPI.register({ email, password });
+      
+      // Store email and password temporarily for auto-verification check
+      localStorage.setItem('pendingVerificationEmail', email);
+      localStorage.setItem('pendingVerificationPassword', password);
+      
+      // Redirect to verification pending page
+      navigate('/verify-pending');
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed');
     } finally {
