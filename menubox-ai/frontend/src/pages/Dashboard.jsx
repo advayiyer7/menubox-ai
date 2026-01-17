@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { menuAPI, recommendationsAPI } from '../services/api';
+import { menuAPI, recommendationsAPI, authAPI } from '../services/api';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -16,11 +16,17 @@ function Dashboard() {
   
   // Refs for file inputs
   const fileInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
+  const mobileFileInputRef = useRef(null);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/');
+  // Check if mobile device
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } finally {
+      navigate('/');
+    }
   };
 
   const handleSearch = async (e) => {
@@ -49,13 +55,6 @@ function Dashboard() {
     }
   };
 
-  const handleCameraCapture = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFiles(prev => [...prev, file]);
-    }
-  };
-
   const removeFile = (index) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
@@ -63,7 +62,16 @@ function Dashboard() {
   const clearAllFiles = () => {
     setSelectedFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (mobileFileInputRef.current) mobileFileInputRef.current.value = '';
+  };
+
+  const openCamera = () => {
+    if (isMobile) {
+      mobileFileInputRef.current?.click();
+    } else {
+      // On desktop, just open file picker
+      fileInputRef.current?.click();
+    }
   };
 
   const handleFileUpload = async (e) => {
@@ -77,7 +85,7 @@ function Dashboard() {
       const formData = new FormData();
       
       // Append all files
-      selectedFiles.forEach((file, index) => {
+      selectedFiles.forEach((file) => {
         formData.append('files', file);
       });
       
@@ -91,7 +99,7 @@ function Dashboard() {
       const uploadRes = await menuAPI.uploadImages(formData);
       const { restaurant_id } = uploadRes.data;
       
-      // Generate recommendations (will use OCR-only mode)
+      // Generate recommendations
       const recRes = await recommendationsAPI.generate(restaurant_id);
       
       navigate(`/results/${recRes.data.id}`);
@@ -114,9 +122,18 @@ function Dashboard() {
               to="/preferences" 
               className="text-gray-600 hover:text-orange-600 dark:text-gray-300 flex items-center gap-1"
             >
-              ⚙️ Preferences
+              ⚙️ <span className="hidden sm:inline">Preferences</span>
             </Link>
-            <button onClick={handleLogout} className="text-gray-600 hover:text-orange-600 dark:text-gray-300">
+            <Link 
+              to="/sessions" 
+              className="text-gray-600 hover:text-orange-600 dark:text-gray-300 flex items-center gap-1"
+            >
+              🔐 <span className="hidden sm:inline">Sessions</span>
+            </Link>
+            <button 
+              onClick={handleLogout} 
+              className="text-gray-600 hover:text-orange-600 dark:text-gray-300"
+            >
               Logout
             </button>
           </div>
@@ -142,19 +159,21 @@ function Dashboard() {
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
             <h2 className="text-xl font-semibold mb-4 dark:text-white">📸 Upload Menu Photos</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Take photos or upload images of the menu pages. Inputting the restaurant name and location helps us find reviews online!
+              Take photos or upload images of the menu pages.
             </p>
             <form onSubmit={handleFileUpload} className="space-y-3">
               {/* Camera and File buttons */}
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => cameraInputRef.current?.click()}
+                  onClick={openCamera}
                   disabled={loading}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-orange-300 dark:border-orange-700 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 transition disabled:opacity-50"
                 >
                   <span>📷</span>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Take Photo</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {isMobile ? 'Take Photo' : 'Add Photo'}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -169,11 +188,11 @@ function Dashboard() {
 
               {/* Hidden file inputs */}
               <input
-                ref={cameraInputRef}
+                ref={mobileFileInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
-                onChange={handleCameraCapture}
+                onChange={handleFileSelect}
                 className="hidden"
               />
               <input

@@ -1,26 +1,64 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../../services/api';
 
 function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
+
+  useEffect(() => {
+    // Check if redirected due to unverified email
+    if (searchParams.get('unverified') === 'true') {
+      setError('Please verify your email before logging in.');
+      setShowResend(true);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setShowResend(false);
+    setResendSuccess(false);
     setLoading(true);
 
     try {
       await authAPI.login({ email, password });
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed');
+      const detail = err.response?.data?.detail || 'Login failed';
+      setError(detail);
+      
+      // Show resend option if email not verified
+      if (detail.includes('verify your email')) {
+        setShowResend(true);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      setError('Please enter your email address first');
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      await authAPI.resendVerification(email);
+      setResendSuccess(true);
+      setError('');
+    } catch (err) {
+      setError('Failed to resend verification email');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -39,6 +77,27 @@ function Login() {
         {error && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm">
             {error}
+          </div>
+        )}
+
+        {resendSuccess && (
+          <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg text-sm">
+            ✓ Verification email sent! Check your inbox.
+          </div>
+        )}
+
+        {showResend && !resendSuccess && (
+          <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg">
+            <p className="text-yellow-700 dark:text-yellow-400 text-sm mb-2">
+              Didn't receive the verification email?
+            </p>
+            <button
+              onClick={handleResendVerification}
+              disabled={resendLoading}
+              className="text-orange-500 hover:text-orange-600 text-sm font-medium disabled:opacity-50"
+            >
+              {resendLoading ? 'Sending...' : 'Resend verification email'}
+            </button>
           </div>
         )}
 

@@ -1,7 +1,6 @@
 /**
  * MenuBox AI - Main Application Component
  * Routes and authentication handling
- * @version 0.3.0
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -9,6 +8,7 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Results from './pages/Results';
 import Preferences from './pages/Preferences';
+import Sessions from './pages/Sessions';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
@@ -21,7 +21,6 @@ const ProtectedRoute = ({ children }) => {
 };
 
 const PublicRoute = ({ children }) => {
-  // Redirect to dashboard if already logged in
   return isAuthenticated() ? <Navigate to="/dashboard" replace /> : children;
 };
 
@@ -41,6 +40,7 @@ function App() {
           {/* Protected routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/preferences" element={<ProtectedRoute><Preferences /></ProtectedRoute>} />
+          <Route path="/sessions" element={<ProtectedRoute><Sessions /></ProtectedRoute>} />
           <Route path="/results/:id" element={<ProtectedRoute><Results /></ProtectedRoute>} />
           
           {/* Fallback */}
