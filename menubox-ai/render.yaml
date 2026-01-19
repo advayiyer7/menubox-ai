@@ -1,0 +1,29 @@
+# render.yaml - Render Blueprint
+# Place this in the root of your repository
+
+services:
+  - type: web
+    name: menubox-api
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: YELP_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: FROM_EMAIL
+        value: noreply@menubox.ai
+    healthCheckPath: /health
