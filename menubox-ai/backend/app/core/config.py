@@ -1,54 +1,64 @@
-from pydantic_settings import BaseSettings
+"""
+Application Settings
+Supports both local development and production (Render + Neon)
+"""
+
 from functools import lru_cache
+from pydantic_settings import BaseSettings
+import os
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    # Database - supports both local and Neon
+    # Neon provides DATABASE_URL, local uses individual vars
+    database_url: str | None = None
+    db_host: str = "localhost"
+    db_port: int = 5432
+    db_name: str = "menubox_ai"
+    db_user: str = "postgres"
+    db_password: str = ""
     
-    # App
-    app_env: str = "development"
-    debug: bool = True
-    app_name: str = "MenuBox AI"
-    api_prefix: str = "/api"
-    
-    # Database
-    database_url: str
-    
-    # JWT
-    jwt_secret_key: str
+    # JWT Settings
+    jwt_secret_key: str = "your-secret-key-change-in-production"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 10080  # 7 days
+    access_token_expire_minutes: int = 15
     
-    # AI Services
+    # API Keys
     anthropic_api_key: str | None = None
-    openai_api_key: str | None = None
-    
-    # External APIs
     google_places_api_key: str | None = None
     yelp_api_key: str | None = None
     
-    # Rate Limiting
-    rate_limit_per_minute: int = 60
+    # Email (Brevo)
+    brevo_api_key: str | None = None
+    from_email: str = "noreply@menubox.ai"
+    from_name: str = "MenuBox AI"
+    
+    # Frontend URL (for email links)
+    frontend_url: str = "http://localhost:5173"
+    
+    @property
+    def database_url_computed(self) -> str:
+        """
+        Get database URL - prefers DATABASE_URL env var (Neon/Render),
+        falls back to constructing from individual vars (local dev).
+        """
+        # Check for DATABASE_URL (used by Render/Neon)
+        db_url = self.database_url or os.getenv("DATABASE_URL")
+        
+        if db_url:
+            # Neon uses postgres:// but SQLAlchemy needs postgresql://
+            if db_url.startswith("postgres://"):
+                db_url = db_url.replace("postgres://", "postgresql://", 1)
+            return db_url
+        
+        # Fall back to constructing URL from individual vars
+        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
     
     class Config:
         env_file = ".env"
-        case_sensitive = False
-    
-    # In the Settings class, add:
-    yelp_api_key: str | None = None
-
-    # resend_api_key: str | None = None
-    # from_email: str = "onboarding@resend.dev"  # Use this for testing
-    # frontend_url: str = "http://localhost:5173"
-
-    # Email settings (Brevo)
-    brevo_api_key: str | None = None
-    from_email: str = "noreply@menubox.ai"  # Can be any email for now
-    from_name: str = "MenuBox AI"
-    frontend_url: str = "http://localhost:5173"
+        extra = "ignore"  # Ignore extra env vars
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Cached settings instance."""
     return Settings()
