@@ -3,7 +3,6 @@
 **AI-powered restaurant menu recommendations based on review analysis and personal preferences.**
 
 ## Tech Stack
-
 - **Frontend:** React, Vite, Tailwind CSS, React Router
 - **Backend:** Python, FastAPI, SQLAlchemy, Pydantic
 - **Database:** PostgreSQL
@@ -29,7 +28,6 @@
 
 ```bash
 cd backend
-
 # Create virtual environment
 python -m venv venv
 
@@ -90,7 +88,6 @@ ANTHROPIC_API_KEY=your-anthropic-api-key  # Optional, for AI recommendations
 
 ## Project Structure
 
-```
 menubox-ai/
 ├── backend/
 │   ├── app/
