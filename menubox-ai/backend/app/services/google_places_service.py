@@ -127,14 +127,12 @@ def extract_cuisine_type(types: list[str], name: str) -> str:
         "cafe": "Cafe",
         "bakery": "Bakery"
     }
-    
     # Check types
     for t in types:
         t_lower = t.lower().replace("_", " ")
         for keyword, cuisine in cuisine_keywords.items():
             if keyword in t_lower:
                 return cuisine
-    
     # Check name
     name_lower = name.lower()
     for keyword, cuisine in cuisine_keywords.items():
