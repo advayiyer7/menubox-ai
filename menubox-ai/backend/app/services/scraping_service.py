@@ -157,6 +157,7 @@ async def scrape_restaurant_menu(
     return await get_menu_with_web_search(restaurant_name, location)
 
 
+
 async def fetch_website_content(url: str) -> str | None:
     """Fetch HTML content from a URL - legacy fallback."""
     try:
