@@ -13,9 +13,10 @@ settings = get_settings()
 DATABASE_URL = settings.database_url_computed
 
 # Create engine
-# For Neon, we need SSL mode
+# For Neon/Render, require SSL — but only if the URL doesn't already specify
+# sslmode (psycopg2 errors if sslmode is given twice).
 engine_args = {}
-if "neon" in DATABASE_URL or "render" in DATABASE_URL:
+if ("neon" in DATABASE_URL or "render" in DATABASE_URL) and "sslmode" not in DATABASE_URL:
     engine_args["connect_args"] = {"sslmode": "require"}
 
 engine = create_engine(DATABASE_URL, **engine_args)
