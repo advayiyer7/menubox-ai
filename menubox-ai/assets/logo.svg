@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="MenuBox AI logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fb923c"/>
+      <stop offset="1" stop-color="#ea580c"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- plate -->
+  <circle cx="256" cy="256" r="92" fill="none" stroke="#ffffff" stroke-width="14"/>
+  <circle cx="256" cy="256" r="58" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.5"/>
+
+  <!-- fork -->
+  <g fill="#ffffff">
+    <rect x="124" y="132" width="10" height="72" rx="5"/>
+    <rect x="140" y="132" width="10" height="72" rx="5"/>
+    <rect x="156" y="132" width="10" height="72" rx="5"/>
+    <rect x="122" y="196" width="46" height="16" rx="8"/>
+    <rect x="137" y="205" width="16" height="175" rx="8"/>
+  </g>
+
+  <!-- knife -->
+  <g fill="#ffffff">
+    <path d="M364 210 L364 152 Q364 132 379 132 Q389 140 389 182 L389 210 Z"/>
+    <rect x="368" y="205" width="14" height="175" rx="7"/>
+  </g>
+</svg>
