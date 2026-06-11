@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://menubox-api.onrender.com/api/:path*"
+      "destination": "https://menubox-ai.onrender.com/api/:path*"
     }
   ],
   "headers": [
