@@ -17,7 +17,6 @@ class Restaurant(Base):
     location = Column(String(255))
     cuisine_type = Column(String(100))
     price_range = Column(String(10))  # $, $$, $$$, $$$$
-    yelp_id = Column(String(100))
     google_place_id = Column(String(100))
     last_scraped = Column(DateTime(timezone=True))
     

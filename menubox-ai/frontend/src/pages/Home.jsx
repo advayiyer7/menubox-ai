@@ -41,7 +41,7 @@ function Home() {
             <div className="text-3xl mb-4">⭐</div>
             <h3 className="text-xl font-semibold mb-2 dark:text-white">Review Analysis</h3>
             <p className="text-gray-600 dark:text-gray-400">
-              We aggregate reviews from Yelp, Google, and more to find the crowd favorites.
+              We analyze Google reviews to find the crowd favorites.
             </p>
           </div>
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">

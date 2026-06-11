@@ -36,13 +36,16 @@ from app.services.email_service import (
     send_verification_email,
     send_welcome_email,
 )
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/hour")
 async def register(
-    data: UserRegister, 
+    request: Request,
+    data: UserRegister,
     db: Session = Depends(get_db)
 ):
     """
@@ -96,8 +99,9 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("20/minute")
 async def login(
-    data: UserLogin, 
+    data: UserLogin,
     request: Request,
     db: Session = Depends(get_db)
 ):
@@ -164,7 +168,9 @@ async def logout(
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
+@limiter.limit("5/hour")
 async def forgot_password(
+    request: Request,
     data: PasswordResetRequest,
     db: Session = Depends(get_db)
 ):
@@ -245,7 +251,9 @@ async def verify_email(
 
 
 @router.post("/resend-verification", response_model=MessageResponse)
+@limiter.limit("5/hour")
 async def resend_verification(
+    request: Request,
     data: ResendVerificationRequest,
     db: Session = Depends(get_db)
 ):

@@ -57,7 +57,7 @@ Return ONLY the JSON object, no other text."""
         client = Anthropic(api_key=settings.anthropic_api_key)
         
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -113,7 +113,7 @@ Return ONLY the JSON array, no other text."""
         client = Anthropic(api_key=settings.anthropic_api_key)
         
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}]
         )

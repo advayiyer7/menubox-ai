@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -15,47 +15,55 @@ from app.schemas.recommendation import (
     RecommendedItem,
 )
 from app.services.ai_service import generate_recommendations
-from app.services.yelp_service import get_yelp_data, format_yelp_for_recommendations
+from app.services.google_places_service import (
+    search_restaurant as google_search,
+    get_place_details,
+    format_google_for_recommendations,
+)
 from app.services.review_analyzer import analyze_reviews_for_dishes
+from app.core.rate_limit import limiter
+from app.core.quota import daily_quota
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 
 
-async def get_dish_reviews_from_yelp(
+async def get_dish_reviews_from_google(
     restaurant_name: str,
     location: str,
     menu_item_names: list[str]
 ) -> str:
     """
-    Cross-reference menu items with Yelp reviews.
-    Returns formatted string with what reviewers say about specific dishes.
+    Cross-reference menu items with Google reviews.
+    Searches Google Places for the restaurant, then analyzes its reviews for
+    mentions of specific dishes. Returns a formatted string.
     """
     try:
-        yelp_data = await get_yelp_data(restaurant_name, location)
-        
-        if not yelp_data.get("found"):
+        place = await google_search(restaurant_name, location)
+
+        if not place or not place.get("place_id"):
             return ""
-        
-        business = yelp_data.get("business", {})
-        reviews = yelp_data.get("reviews", [])
-        
+
+        details = await get_place_details(place["place_id"])
+
+        if not details:
+            return ""
+
+        reviews = details.get("reviews", [])
+
         if not reviews:
             # Return just the rating if no review text
-            rating = business.get("rating")
-            review_count = business.get("review_count")
-            if rating:
-                return f"Yelp Rating: {rating}/5 ({review_count} reviews)"
-            return ""
-        
+            rating = details.get("rating")
+            return f"Google Rating: {rating}/5" if rating else ""
+
         # Analyze which dishes are mentioned in reviews
         reviews_formatted = [{"text": r.get("text", ""), "rating": r.get("rating")} for r in reviews]
         dish_mentions = await analyze_reviews_for_dishes(reviews_formatted, menu_item_names)
-        
+
         parts = []
-        parts.append(f"Yelp Rating: {business.get('rating', 'N/A')}/5 ({business.get('review_count', 0)} reviews)")
-        
+        parts.append(f"Google Rating: {details.get('rating', 'N/A')}/5")
+
         if dish_mentions:
-            parts.append("\nDishes mentioned in reviews:")
+            parts.append("\nDishes mentioned in Google reviews:")
             for dish_name, info in dish_mentions.items():
                 sentiment = info.get("sentiment", "unknown")
                 mentions = info.get("mentions", 0)
@@ -64,33 +72,35 @@ async def get_dish_reviews_from_yelp(
                 quotes = info.get("quotes", [])
                 for quote in quotes[:1]:  # Just first quote
                     parts.append(f"     \"{quote}\"")
-        
+
         # Add general review snippets
-        parts.append("\nRecent review highlights:")
+        parts.append("\nRecent Google review highlights:")
         for review in reviews[:2]:
             rating = review.get("rating", "?")
-            text = review.get("text", "")[:150]
+            text = (review.get("text", "") or "")[:150]
             parts.append(f"  ({rating}/5) \"{text}...\"")
-        
+
         return "\n".join(parts)
-        
+
     except Exception as e:
-        print(f"Error getting dish reviews from Yelp: {e}")
+        print(f"Error getting dish reviews from Google: {e}")
         return ""
 
 
 @router.post("/generate", response_model=RecommendationResponse)
+@limiter.limit("30/hour")
 async def create_recommendation(
+    request: Request,
     data: RecommendationRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(daily_quota("recommend", 50)),
     db: Session = Depends(get_db)
 ):
     """
     Generate AI-powered menu recommendations.
-    
-    For searched restaurants: Uses full Yelp review data
+
+    For searched restaurants: Uses full Google review data
     For OCR uploads: Only uses parsed menu items, but cross-references
-                     those specific dishes with Yelp reviews
+                     those specific dishes with Google reviews
     """
     # Get restaurant
     restaurant = db.query(Restaurant).filter(Restaurant.id == data.restaurant_id).first()
@@ -99,7 +109,7 @@ async def create_recommendation(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Restaurant not found"
         )
-    
+
     # Get menu items
     menu_items = db.query(MenuItem).filter(MenuItem.restaurant_id == data.restaurant_id).all()
     if not menu_items:
@@ -107,44 +117,46 @@ async def create_recommendation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Restaurant has no menu items"
         )
-    
+
     # Get user preferences
     preferences = db.query(Preference).filter(Preference.user_id == current_user.id).first()
-    
+
     # Determine if this is an OCR-uploaded restaurant
     is_ocr_upload = restaurant.google_place_id is None
-    
+
     review_context = ""
-    
+
     if is_ocr_upload:
-        # OCR MODE: Only use parsed menu items, but cross-reference with Yelp
-        print(f"OCR mode for {restaurant.name} - cross-referencing dishes with Yelp...")
-        
-        # Only try Yelp if we have a real location (not "Uploaded via photo")
+        # OCR MODE: Only use parsed menu items, but cross-reference those dishes
+        # with Google reviews.
+        print(f"OCR mode for {restaurant.name} - cross-referencing dishes with Google...")
+
+        # Only try review lookups if we have a real location (not "Uploaded via photo")
         if restaurant.location and restaurant.location != "Uploaded via photo":
             menu_item_names = [item.item_name for item in menu_items]
-            review_context = await get_dish_reviews_from_yelp(
+            review_context = await get_dish_reviews_from_google(
                 restaurant.name,
                 restaurant.location,
                 menu_item_names
             )
             if review_context:
-                print(f"Found Yelp data for dish cross-reference")
+                print("Found Google data for dish cross-reference")
             else:
-                print(f"No Yelp data found for {restaurant.name}")
+                print(f"No Google data found for {restaurant.name}")
     else:
-        # SEARCH MODE: Use full Yelp review data
-        print(f"Search mode for {restaurant.name} - fetching Yelp reviews...")
+        # SEARCH MODE: Use full Google review data (we already have the place_id
+        # from the search step).
+        print(f"Search mode for {restaurant.name} - fetching Google reviews...")
         try:
-            yelp_data = await get_yelp_data(restaurant.name, restaurant.location)
-            if yelp_data.get("found"):
-                review_context = format_yelp_for_recommendations(yelp_data)
-                print(f"Got Yelp data: {yelp_data['business'].get('rating')}/5 ({yelp_data['business'].get('review_count')} reviews)")
+            google_details = await get_place_details(restaurant.google_place_id)
+            review_context = format_google_for_recommendations(google_details)
+            if review_context:
+                print(f"Got Google data: {google_details.get('rating')}/5")
             else:
-                print("Restaurant not found on Yelp")
+                print("No Google review data found")
         except Exception as e:
-            print(f"Yelp fetch error (continuing without): {e}")
-    
+            print(f"Google fetch error (continuing without): {e}")
+
     # Generate recommendations using AI
     recommended_items = await generate_recommendations(
         menu_items=menu_items,
@@ -152,7 +164,7 @@ async def create_recommendation(
         max_items=data.max_items,
         review_context=review_context
     )
-    
+
     # Save recommendation to history
     recommendation = Recommendation(
         user_id=current_user.id,
@@ -170,7 +182,7 @@ async def create_recommendation(
     db.add(recommendation)
     db.commit()
     db.refresh(recommendation)
-    
+
     return RecommendationResponse(
         id=recommendation.id,
         user_id=recommendation.user_id,
@@ -191,13 +203,13 @@ async def get_recommendation(
         Recommendation.id == recommendation_id,
         Recommendation.user_id == current_user.id
     ).first()
-    
+
     if not recommendation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recommendation not found"
         )
-    
+
     return RecommendationResponse(
         id=recommendation.id,
         user_id=recommendation.user_id,
@@ -217,7 +229,7 @@ async def list_recommendations(
     recommendations = db.query(Recommendation).filter(
         Recommendation.user_id == current_user.id
     ).order_by(Recommendation.created_at.desc()).limit(limit).all()
-    
+
     return [
         RecommendationResponse(
             id=rec.id,

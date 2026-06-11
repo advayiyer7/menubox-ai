@@ -140,5 +140,35 @@ def extract_cuisine_type(types: list[str], name: str) -> str:
     for keyword, cuisine in cuisine_keywords.items():
         if keyword in name_lower:
             return cuisine
-    
+
     return "Restaurant"
+
+
+def format_google_for_recommendations(place_details: dict | None) -> str:
+    """
+    Format Google Places data (rating, summary, reviews) as context for AI
+    recommendations.
+    """
+    if not place_details:
+        return ""
+
+    parts = []
+
+    rating = place_details.get("rating")
+    if rating:
+        parts.append(f"Google Rating: {rating}/5")
+
+    summary = place_details.get("summary")
+    if summary:
+        parts.append(f"Google Summary: {summary}")
+
+    reviews = place_details.get("reviews", [])
+    if reviews:
+        parts.append("\nRecent Google Reviews:")
+        for i, review in enumerate(reviews[:5], 1):
+            rating = review.get("rating", "?")
+            text = (review.get("text", "") or "")[:200]  # Truncate long reviews
+            if text:
+                parts.append(f"  {i}. ({rating}/5) \"{text}...\"")
+
+    return "\n".join(parts)

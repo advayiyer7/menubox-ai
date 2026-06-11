@@ -164,7 +164,6 @@ Scroll down to "Environment Variables" and add each one:
 | `ANTHROPIC_API_KEY` | `sk-ant-...` (your Claude API key) |
 | `BREVO_API_KEY` | `xkeysib-...` (your Brevo key) |
 | `GOOGLE_PLACES_API_KEY` | `AIza...` (your Google key) |
-| `YELP_API_KEY` | Your Yelp key (optional) |
 | `FRONTEND_URL` | `https://menubox-ai.vercel.app` (update after Vercel deploy) |
 | `FROM_EMAIL` | `noreply@menubox.ai` |
 

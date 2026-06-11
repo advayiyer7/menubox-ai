@@ -29,7 +29,7 @@ async def generate_recommendations(
         menu_items: List of menu items from the restaurant
         preferences: User's food preferences
         max_items: Number of recommendations to return
-        review_context: Formatted string with Yelp/Google review data
+        review_context: Formatted string with Google review data
     """
     
     # Build menu items text
@@ -65,7 +65,7 @@ async def generate_recommendations(
     review_section = ""
     if review_context:
         review_section = f"""
-REVIEW DATA (from Yelp & Google):
+REVIEW DATA (from Google reviews):
 {review_context}
 
 """
@@ -104,7 +104,7 @@ Return ONLY the JSON array, no other text."""
         client = Anthropic(api_key=settings.anthropic_api_key)
         
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             messages=[
                 {"role": "user", "content": prompt}

@@ -2,7 +2,7 @@
 Menu router - handles restaurant search, menu scraping, and image upload.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
 from typing import Optional
@@ -27,14 +27,18 @@ from app.services.google_places_service import (
 from app.services.scraping_service import scrape_restaurant_menu
 from app.services.review_analyzer import get_popular_dishes_from_reviews
 from app.services.ocr_service import extract_menu_from_image, extract_menu_from_multiple_images
+from app.core.rate_limit import limiter
+from app.core.quota import daily_quota
 
 router = APIRouter(prefix="/menu", tags=["Menu"])
 
 
 @router.post("/search", response_model=RestaurantWithMenuResponse)
+@limiter.limit("20/hour")
 async def search_restaurant(
+    request: Request,
     data: RestaurantSearch,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(daily_quota("search", 30)),
     db: Session = Depends(get_db)
 ):
     """
@@ -201,11 +205,13 @@ async def search_restaurant(
 
 
 @router.post("/upload", response_model=MenuUploadResponse)
+@limiter.limit("20/hour")
 async def upload_menu_image(
+    request: Request,
     file: UploadFile = File(...),
     restaurant_name: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(daily_quota("upload", 30)),
     db: Session = Depends(get_db)
 ):
     """
@@ -306,11 +312,13 @@ async def upload_menu_image(
 
 
 @router.post("/upload-multiple", response_model=MenuUploadResponse)
+@limiter.limit("10/hour")
 async def upload_multiple_menu_images(
+    request: Request,
     files: list[UploadFile] = File(...),
     restaurant_name: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(daily_quota("upload_multiple", 15)),
     db: Session = Depends(get_db)
 ):
     """

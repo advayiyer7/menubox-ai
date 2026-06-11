@@ -9,6 +9,11 @@ import os
 
 
 class Settings(BaseSettings):
+    # Server
+    app_env: str = "development"
+    debug: bool = True
+    rate_limit_per_minute: int = 60
+
     # Database - supports both local and Neon
     # Neon provides DATABASE_URL, local uses individual vars
     database_url: str | None = None
@@ -26,7 +31,6 @@ class Settings(BaseSettings):
     # API Keys
     anthropic_api_key: str | None = None
     google_places_api_key: str | None = None
-    yelp_api_key: str | None = None
     
     # Email (Brevo)
     brevo_api_key: str | None = None
